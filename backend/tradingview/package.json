@@ -1,0 +1,13 @@
+{
+  "name": "portai-tradingview-bridge",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Node.js bridge to fetch real-time quotes from TradingView for PortAI agents",
+  "main": "fetch_quotes.js",
+  "scripts": {
+    "test": "node fetch_quotes.js NASDAQ:AAPL IDX:BBCA BITSTAMP:BTCUSD"
+  },
+  "dependencies": {
+    "@mathieuc/tradingview": "^3.5.2"
+  }
+}

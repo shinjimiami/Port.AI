@@ -35,6 +35,14 @@ class Settings(BaseSettings):
     COINGECKO_API_KEY: str = ""
     NEWSAPI_KEY: str = ""
 
+    # Supabase storage (for fundamental analysis file uploads)
+    SUPABASE_URL: str = ""
+    SUPABASE_SERVICE_KEY: str = ""
+    SUPABASE_BUCKET: str = "fundamental-files"
+
+    # TradingView Node.js bridge
+    NODE_BIN: str = "node"
+
     # Business rules
     MAX_DAILY_GENERATIONS: int = 5
     MARKET_CACHE_TTL_SECONDS: int = 900  # 15 min

@@ -136,6 +136,7 @@ async def portfolio_status(
         "status": portfolio.status,
         "current_node": progress.get("node") if progress else None,
         "message": progress.get("message") if progress else None,
+        "error_message": portfolio.error_message,
         "created_at": portfolio.created_at,
         "completed_at": portfolio.completed_at,
     }

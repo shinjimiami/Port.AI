@@ -11,6 +11,7 @@ from app.services.market_data.crypto import fetch_crypto
 from app.services.market_data.fear_greed import fetch_fear_greed
 from app.services.market_data.idx_stocks import fetch_idx_stocks
 from app.services.market_data.indices import fetch_indices
+from app.services.market_data.market_sentiment import fetch_market_sentiment
 from app.services.market_data.news import fetch_market_news
 from app.services.market_data.us_stocks import fetch_us_stocks
 
@@ -89,6 +90,16 @@ async def market_indices(current_user: User = Depends(get_current_user)) -> Dict
         raise HTTPException(status_code=503, detail="Indices data unavailable")
 
 
+@router.get("/sentiment")
+async def market_sentiment(current_user: User = Depends(get_current_user)) -> Dict[str, Any]:
+    """Return intraday market sentiment from live CoinGecko data. Cached 60 s."""
+    try:
+        return await fetch_market_sentiment()
+    except Exception as exc:
+        logger.error("Market sentiment endpoint failed: %s", exc)
+        raise HTTPException(status_code=503, detail="Market sentiment unavailable")
+
+
 @router.get("/ai-brief")
 async def ai_market_brief(current_user: User = Depends(get_current_user)) -> Dict[str, Any]:
     """Return AI-generated market brief (Claude). Cached 1 h."""
@@ -106,15 +117,17 @@ async def ai_market_brief(current_user: User = Depends(get_current_user)) -> Dic
 
 @router.get("/dashboard")
 async def market_dashboard(current_user: User = Depends(get_current_user)) -> Dict[str, Any]:
-    """Aggregate endpoint: fear-greed + indices + news (no AI brief — call /ai-brief separately)."""
+    """Aggregate endpoint: fear-greed + sentiment + indices + news."""
     try:
-        fear_greed_data, indices_data, news_data = await asyncio.gather(
+        fear_greed_data, sentiment_data, indices_data, news_data = await asyncio.gather(
             fetch_fear_greed(),
+            fetch_market_sentiment(),
             fetch_indices(),
             fetch_market_news(),
         )
         return {
             "fear_greed": fear_greed_data,
+            "sentiment": sentiment_data,
             "indices": indices_data,
             "news": news_data,
         }

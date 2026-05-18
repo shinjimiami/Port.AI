@@ -36,7 +36,7 @@ export default function ProgressTracker({ portfolioId }: Props) {
 
         if (data.status === "failed") {
           clearInterval(interval);
-          setError("Portfolio generation failed. Please try again.");
+          setError(data.error_message ?? "Portfolio generation failed. Please try again.");
         }
       } catch {
         // Network blip — keep polling

@@ -5,11 +5,12 @@ import {
   Activity,
   AlertCircle,
   Bot,
+  Gauge,
   RefreshCw,
-  TrendingUp,
+  Radio,
 } from "lucide-react";
 import { marketApi } from "@/lib/api";
-import type { AIBrief, FearGreedData, MarketDashboard } from "@/lib/types";
+import type { AIBrief, FearGreedData, MarketDashboard, MarketSentimentData } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import TradingViewTicker from "@/components/market/TradingViewTicker";
 import TradingViewChart from "@/components/market/TradingViewChart";
@@ -81,6 +82,79 @@ function FearGreedCard({ data }: { data: FearGreedData }) {
                 className={cn("flex-1 rounded-sm opacity-80", fgBar(h.value))}
                 style={{ height: `${Math.max(12, h.value)}%` }}
               />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RealMarketSentimentCard({ data }: { data: MarketSentimentData }) {
+  return (
+    <div className="card h-full flex flex-col">
+      <div className="flex items-start justify-between gap-3 mb-4">
+        <div className="flex items-center gap-2">
+          <Gauge size={18} className="text-brand-600" />
+          <h2 className="font-semibold text-gray-800">Real Market Sentiment</h2>
+        </div>
+        <span
+          className={cn(
+            "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium",
+            data.is_live ? "bg-emerald-50 text-emerald-700" : "bg-yellow-50 text-yellow-700"
+          )}
+        >
+          <Radio size={11} className={data.is_live ? "animate-pulse" : ""} />
+          {data.is_live ? "Live" : "Mock"}
+        </span>
+      </div>
+
+      <div className={cn("rounded-xl p-5 flex flex-col items-center gap-2 mb-4", fgBg(data.value))}>
+        <span className={cn("text-7xl font-bold tabular-nums leading-none", fgColor(data.value))}>
+          {data.value}
+        </span>
+        <span className={cn("text-sm font-bold uppercase tracking-widest mt-1", fgColor(data.value))}>
+          {data.classification}
+        </span>
+        <div className="w-full bg-white/70 rounded-full h-3 mt-2">
+          <div
+            className={cn("h-3 rounded-full transition-all duration-700", fgBar(data.value))}
+            style={{ width: `${data.value}%` }}
+          />
+        </div>
+        <div className="flex justify-between w-full text-xs text-gray-400 px-0.5">
+          <span>Bearish</span>
+          <span>Bullish</span>
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        {data.components.map((component) => (
+          <div key={component.key}>
+            <div className="flex items-start justify-between gap-2 text-xs mb-1">
+              <span className="font-medium text-gray-600 shrink-0">{component.name}</span>
+              <span className="text-right leading-snug text-gray-400 tabular-nums">{component.label}</span>
+            </div>
+            <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
+              <div
+                className={cn("h-full rounded-full", fgBar(component.score))}
+                style={{ width: `${component.score}%` }}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {data.drivers.length > 0 && (
+        <div className="mt-4 pt-3 border-t border-gray-100">
+          <p className="text-xs text-gray-400 mb-2">
+            {data.source} · {data.refresh_seconds}s cache · {data.sample_size} assets
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {data.drivers.slice(0, 3).map((driver) => (
+              <span key={driver} className="rounded-full bg-gray-50 px-2 py-1 text-xs text-gray-600">
+                {driver}
+              </span>
             ))}
           </div>
         </div>
@@ -230,9 +304,9 @@ export default function MarketPage() {
 
       {/* ── Fear & Greed + News ── */}
       {loadingDashboard && !dashboard && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {[0, 1].map((i) => (
-            <div key={i} className={cn("card animate-pulse", i === 1 && "lg:col-span-2")}>
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className={cn("card animate-pulse", i === 2 && "lg:col-span-2")}>
               <div className="h-4 bg-gray-200 rounded w-1/3 mb-4" />
               <div className="h-32 bg-gray-100 rounded" />
             </div>
@@ -241,7 +315,10 @@ export default function MarketPage() {
       )}
 
       {dashboard && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          <div className="lg:col-span-1">
+            <RealMarketSentimentCard data={dashboard.sentiment} />
+          </div>
           <div className="lg:col-span-1">
             <FearGreedCard data={dashboard.fear_greed} />
           </div>

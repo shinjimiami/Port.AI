@@ -1,9 +1,13 @@
-"""IDX stock data via yfinance — with Redis cache (sync)."""
+"""IDX stock data — TradingView (primary) with yfinance fallback.
+
+fetch_idx_stocks() is now async to support the TradingView WebSocket bridge.
+The market_data_fetcher agent awaits it alongside the other async fetches.
+"""
 import logging
 from typing import Dict, List, Optional
 
 from app.schemas.market import StockQuote
-from app.services.cache import sync_cache_get, sync_cache_set
+from app.services.cache import cache_get, cache_set
 
 logger = logging.getLogger(__name__)
 
@@ -21,25 +25,79 @@ IDX_TICKERS: Dict[str, List[str]] = {
 
 ALL_IDX_TICKERS = [t for ts in IDX_TICKERS.values() for t in ts]
 
+TICKER_NAME: Dict[str, str] = {
+    "BBCA.JK": "Bank Central Asia",    "BBRI.JK": "Bank Rakyat Indonesia",
+    "BMRI.JK": "Bank Mandiri",         "BBNI.JK": "Bank Negara Indonesia",
+    "TLKM.JK": "Telkom Indonesia",     "EXCL.JK": "XL Axiata",
+    "ISAT.JK": "Indosat Ooredoo",      "ICBP.JK": "Indofood CBP",
+    "INDF.JK": "Indofood",             "UNVR.JK": "Unilever Indonesia",
+    "MYOR.JK": "Mayora Indah",         "GOTO.JK": "GoTo Gojek Tokopedia",
+    "BUKA.JK": "Bukalapak",            "EMTK.JK": "Elang Mahkota Teknologi",
+    "PGAS.JK": "Perusahaan Gas Negara","MEDC.JK": "Medco Energi",
+    "ADRO.JK": "Adaro Energy",         "ASII.JK": "Astra International",
+    "UNTR.JK": "United Tractors",      "SMGR.JK": "Semen Indonesia",
+    "BSDE.JK": "BSD City",             "CTRA.JK": "Ciputra Development",
+    "PWON.JK": "Pakuwon Jati",
+}
 
-def fetch_idx_stocks(tickers: Optional[List[str]] = None) -> Dict[str, List[dict]]:
-    """Return IDX stock quotes grouped by sector. Results are cached for 15 min."""
-    cached = sync_cache_get(CACHE_KEY)
+
+async def fetch_idx_stocks(tickers: Optional[List[str]] = None) -> Dict[str, List[dict]]:
+    """Return IDX stock quotes grouped by sector. TradingView → yfinance → mock."""
+    cached = await cache_get(CACHE_KEY)
     if cached:
         logger.debug("IDX stocks cache hit")
         return cached
 
+    result = await _fetch_via_tradingview(tickers)
+    if not result:
+        result = await _fetch_via_yfinance(tickers)
+    if not result:
+        result = _mock_idx_stocks()
+
+    await cache_set(CACHE_KEY, result)
+    return result
+
+
+async def _fetch_via_tradingview(tickers: Optional[List[str]] = None) -> Dict[str, List[dict]]:
+    try:
+        from app.services.market_data.tradingview import fetch_idx_quotes_tv
+        tv_data = await fetch_idx_quotes_tv()
+        if not tv_data:
+            return {}
+
+        by_sector: Dict[str, List[dict]] = {}
+        target = tickers or ALL_IDX_TICKERS
+        for ticker in target:
+            q = tv_data.get(ticker)
+            if not q or not q.get("price"):
+                continue
+            sector = next((s for s, ts in IDX_TICKERS.items() if ticker in ts), "Unknown")
+            quote = StockQuote(
+                ticker=ticker,
+                name=q.get("name") or TICKER_NAME.get(ticker, ticker.replace(".JK", "")),
+                price=float(q["price"]),
+                change_pct_1d=float(q.get("change_pct", 0)),
+                volume=float(q.get("volume", 0)),
+                sector=sector,
+                currency=q.get("currency") or "IDR",
+            )
+            by_sector.setdefault(sector, []).append(quote.model_dump())
+
+        logger.info("IDX data fetched via TradingView (%d tickers)", sum(len(v) for v in by_sector.values()))
+        return by_sector
+    except Exception as exc:
+        logger.warning("TradingView IDX fetch failed: %s", exc)
+        return {}
+
+
+async def _fetch_via_yfinance(tickers: Optional[List[str]] = None) -> Dict[str, List[dict]]:
     try:
         import yfinance as yf
     except ImportError:
-        logger.warning("yfinance not installed — returning mock IDX data")
-        data = _mock_idx_stocks()
-        sync_cache_set(CACHE_KEY, data)
-        return data
+        return {}
 
     target = tickers or ALL_IDX_TICKERS
     by_sector: Dict[str, List[dict]] = {}
-
     for ticker in target:
         try:
             info = yf.Ticker(ticker).fast_info
@@ -49,7 +107,7 @@ def fetch_idx_stocks(tickers: Optional[List[str]] = None) -> Dict[str, List[dict
                 continue
             quote = StockQuote(
                 ticker=ticker,
-                name=ticker.replace(".JK", ""),
+                name=TICKER_NAME.get(ticker, ticker.replace(".JK", "")),
                 price=price,
                 sector=sector,
                 currency="IDR",
@@ -58,9 +116,8 @@ def fetch_idx_stocks(tickers: Optional[List[str]] = None) -> Dict[str, List[dict
         except Exception as exc:
             logger.warning("Skipping IDX ticker %s: %s", ticker, exc)
 
-    result = by_sector if by_sector else _mock_idx_stocks()
-    sync_cache_set(CACHE_KEY, result)
-    return result
+    logger.info("IDX data fetched via yfinance (%d tickers)", sum(len(v) for v in by_sector.values()))
+    return by_sector
 
 
 def _mock_idx_stocks() -> Dict[str, List[dict]]:

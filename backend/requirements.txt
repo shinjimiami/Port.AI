@@ -38,6 +38,14 @@ celery==5.4.0
 # PDF export
 fpdf2==2.7.9
 
+# Fundamental analysis — file extraction & calculations
+pdfplumber>=0.11.9
+openpyxl>=3.1.5
+numpy>=1.26.0
+
+# Supabase storage
+supabase>=2.30.0
+
 # Utilities
 python-dateutil==2.9.0
 

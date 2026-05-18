@@ -2,10 +2,14 @@ import axios from "axios";
 import type {
   AIBrief,
   FearGreedData,
+  FundamentalAnalysis,
+  FundamentalCreateResponse,
+  FundamentalListItem,
   GeneratePortfolioRequest,
   IndexQuote,
   LoginRequest,
   MarketDashboard,
+  MarketSentimentData,
   NewsArticle,
   Portfolio,
   PortfolioListItem,
@@ -22,13 +26,17 @@ export const api = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
-// Attach JWT on every request
+// Attach JWT and fix Content-Type for every request
 api.interceptors.request.use((config) => {
   if (typeof window !== "undefined") {
     const token = localStorage.getItem("portai_token");
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+  }
+  // Let XHR set Content-Type with boundary when sending FormData
+  if (config.data instanceof FormData) {
+    delete config.headers["Content-Type"];
   }
   return config;
 });
@@ -78,6 +86,23 @@ export const portfolioApi = {
     api.post(`/portfolio/${id}/save`).then((r) => r.data),
 };
 
+// ── Fundamental Analysis ──────────────────────────────────────────────────────
+
+export const fundamentalApi = {
+  analyze: (formData: FormData) =>
+    api
+      .post<FundamentalCreateResponse>("/fundamental/analyze", formData, {
+        timeout: 120_000,
+      })
+      .then((r) => r.data),
+
+  get: (id: number) =>
+    api.get<FundamentalAnalysis>(`/fundamental/analyze/${id}`).then((r) => r.data),
+
+  history: () =>
+    api.get<FundamentalListItem[]>("/fundamental/history").then((r) => r.data),
+};
+
 // ── Market ────────────────────────────────────────────────────────────────────
 
 export const marketApi = {
@@ -89,6 +114,9 @@ export const marketApi = {
 
   fearGreed: () =>
     api.get<FearGreedData>("/market/fear-greed").then((r) => r.data),
+
+  sentiment: () =>
+    api.get<MarketSentimentData>("/market/sentiment").then((r) => r.data),
 
   indices: () =>
     api.get<{ indices: IndexQuote[] }>("/market/indices").then((r) => r.data),

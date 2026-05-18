@@ -17,6 +17,7 @@ htmlcov/
 
 # ===== Node / Next.js =====
 node_modules/
+backend/tradingview/node_modules/
 .next/
 out/
 dist/

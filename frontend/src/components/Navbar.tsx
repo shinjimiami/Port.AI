@@ -2,15 +2,16 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { BarChart2, Clock, Home, LogOut, PlusCircle, TrendingUp } from "lucide-react";
+import { BarChart2, Clock, Home, LogOut, PlusCircle, Search, TrendingUp } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard", icon: Home },
   { href: "/generate",  label: "Generate",  icon: PlusCircle },
-  { href: "/market",    label: "Market",    icon: TrendingUp },
-  { href: "/history",   label: "History",   icon: Clock },
+  { href: "/market",              label: "Market",   icon: TrendingUp },
+  { href: "/analyze/fundamental", label: "Analyze",  icon: Search },
+  { href: "/history",             label: "History",  icon: Clock },
 ];
 
 export default function Navbar() {
