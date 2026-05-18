@@ -1,0 +1,57 @@
+services:
+  # ── FastAPI API ──────────────────────────────────────────────────────────────
+  - type: web
+    name: portai-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile.prod
+    startCommand: bash start.sh
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: portai-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: portai-redis
+          type: redis
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: ALPHA_VANTAGE_API_KEY
+        sync: false
+      - key: LLM_PROVIDER
+        value: anthropic
+      - key: DEBUG
+        value: "false"
+
+  # ── Celery worker ────────────────────────────────────────────────────────────
+  - type: worker
+    name: portai-worker
+    runtime: docker
+    dockerfilePath: ./Dockerfile.prod
+    startCommand: celery -A app.tasks worker --loglevel=info --concurrency=2
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: portai-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: portai-redis
+          type: redis
+          property: connectionString
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: ALPHA_VANTAGE_API_KEY
+        sync: false
+
+databases:
+  - name: portai-db
+    databaseName: portai
+    user: portai
+
+  - name: portai-redis
+    type: redis
