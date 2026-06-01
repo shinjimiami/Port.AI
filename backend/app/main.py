@@ -5,11 +5,15 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.api.v1 import admin, auth, fundamental, market, portfolio
+from app.database import Base, engine
+import app.models  # noqa: F401 — register all models before create_all
 
 logging.basicConfig(
     level=logging.DEBUG if settings.DEBUG else logging.INFO,
     format="%(asctime)s %(levelname)s %(name)s – %(message)s",
 )
+
+Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title=settings.APP_NAME,
