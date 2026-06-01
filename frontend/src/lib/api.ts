@@ -1,6 +1,7 @@
 import axios from "axios";
 import type {
   AIBrief,
+  AdminUserItem,
   FearGreedData,
   FundamentalAnalysis,
   FundamentalCreateResponse,
@@ -101,6 +102,37 @@ export const fundamentalApi = {
 
   history: () =>
     api.get<FundamentalListItem[]>("/fundamental/history").then((r) => r.data),
+};
+
+// ── Admin ─────────────────────────────────────────────────────────────────────
+
+// Separate axios instance for admin — no 401→/login redirect, reads portai_admin_token
+const adminAxios = axios.create({
+  baseURL: `${BASE_URL}/api/v1`,
+  headers: { "Content-Type": "application/json" },
+});
+adminAxios.interceptors.request.use((config) => {
+  if (typeof window !== "undefined") {
+    const token = localStorage.getItem("portai_admin_token");
+    if (token) config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+export const adminApi = {
+  /** Verify any token directly without touching localStorage. */
+  verifyToken: (token: string) =>
+    adminAxios
+      .get<User>("/auth/me", { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => r.data),
+
+  /** Get the currently logged-in admin's profile (uses portai_admin_token). */
+  me: () => adminAxios.get<User>("/auth/me").then((r) => r.data),
+
+  users: () => adminAxios.get<AdminUserItem[]>("/admin/users").then((r) => r.data),
+
+  updateRole: (userId: number, role: string) =>
+    adminAxios.patch(`/admin/users/${userId}/role`, { role }).then((r) => r.data),
 };
 
 // ── Market ────────────────────────────────────────────────────────────────────

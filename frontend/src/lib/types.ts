@@ -338,6 +338,19 @@ export interface FundamentalCreateResponse {
   ticker: string;
 }
 
+// ── Admin ─────────────────────────────────────────────────────────────────────
+
+export interface AdminUserItem {
+  id: number;
+  email: string;
+  name: string;
+  role: "user" | "admin";
+  created_at: string;
+  portfolio_count: number;
+  age?: number | null;
+  risk_tolerance?: string | null;
+}
+
 // ── Progress ───────────────────────────────────────────────────────────────────
 
 export interface ProgressEvent {

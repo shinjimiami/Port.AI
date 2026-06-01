@@ -5,7 +5,7 @@ import logging
 from datetime import date, datetime, timezone
 from typing import AsyncGenerator, List
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from fastapi.responses import Response, StreamingResponse
 from sqlalchemy.orm import Session
 
@@ -47,9 +47,58 @@ def _check_rate_limit_redis(user_id: int) -> None:
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
+async def _run_portfolio_background(portfolio_id: int, user_input_dict: dict) -> None:
+    """Async background task: runs the LangGraph pipeline without a Celery worker."""
+    from app.database import SessionLocal
+    from app.models.portfolio import Portfolio as PortfolioModel
+    from app.schemas.portfolio import GeneratePortfolioRequest
+    from app.services.cache import publish_progress
+    from app.agents.graph import run_pipeline
+
+    db = SessionLocal()
+    try:
+        portfolio = db.query(PortfolioModel).filter(PortfolioModel.id == portfolio_id).first()
+        if not portfolio:
+            return
+
+        portfolio.status = "processing"
+        db.commit()
+        await publish_progress(portfolio_id, "started", "Pipeline starting…")
+
+        user_input = GeneratePortfolioRequest(**user_input_dict)
+        result = await run_pipeline(user_input, portfolio_id)
+
+        db.refresh(portfolio)
+        portfolio.allocation_plan = result["allocation_plan"]
+        portfolio.selected_assets = result["selected_assets"]
+        portfolio.report = result["report"]
+        portfolio.status = "completed"
+        portfolio.completed_at = datetime.now(timezone.utc)
+        db.commit()
+
+        await publish_progress(portfolio_id, "completed", "Report ready")
+        logger.info("Portfolio %s completed", portfolio_id)
+
+    except Exception as exc:
+        logger.error("Portfolio %s failed: %s", portfolio_id, exc, exc_info=True)
+        try:
+            db.rollback()
+            portfolio = db.query(PortfolioModel).filter(PortfolioModel.id == portfolio_id).first()
+            if portfolio:
+                portfolio.status = "failed"
+                portfolio.error_message = str(exc)[:500]
+                db.commit()
+            await publish_progress(portfolio_id, "failed", str(exc))
+        except Exception:
+            pass
+    finally:
+        db.close()
+
+
 @router.post("/generate", response_model=PortfolioResponse, status_code=status.HTTP_202_ACCEPTED)
 async def generate_portfolio(
     payload: GeneratePortfolioRequest,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -72,13 +121,9 @@ async def generate_portfolio(
     db.commit()
     db.refresh(portfolio)
 
-    # Dispatch to Celery
-    from app.tasks.portfolio import generate_portfolio_task
-    generate_portfolio_task.delay(portfolio.id, payload.model_dump())
+    background_tasks.add_task(_run_portfolio_background, portfolio.id, payload.model_dump())
 
-    logger.info(
-        "Portfolio %s queued for user %s", portfolio.id, current_user.id
-    )
+    logger.info("Portfolio %s queued for user %s", portfolio.id, current_user.id)
     return portfolio
 
 

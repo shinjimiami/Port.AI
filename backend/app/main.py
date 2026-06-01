@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.api.v1 import auth, fundamental, market, portfolio
+from app.api.v1 import admin, auth, fundamental, market, portfolio
 
 logging.basicConfig(
     level=logging.DEBUG if settings.DEBUG else logging.INFO,
@@ -32,6 +32,7 @@ app.include_router(auth.router,        prefix="/api/v1/auth",        tags=["auth
 app.include_router(portfolio.router,   prefix="/api/v1/portfolio",   tags=["portfolio"])
 app.include_router(market.router,      prefix="/api/v1/market",      tags=["market"])
 app.include_router(fundamental.router, prefix="/api/v1/fundamental", tags=["fundamental"])
+app.include_router(admin.router,       prefix="/api/v1/admin",       tags=["admin"])
 
 
 @app.get("/health")

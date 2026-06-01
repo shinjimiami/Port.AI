@@ -4,8 +4,9 @@ Extracts raw financial data from uploaded PDF / Excel files.
 Strategy:
   PDF  → pdfplumber scans for financial statement sections by keyword,
           then Groq LLM parses the relevant pages into structured JSON.
-  Excel → openpyxl/pandas identifies financial sheets by name/header,
-          then Groq LLM maps rows to standard field names.
+  Excel → First tries deterministic template extraction (BUMI-style format,
+          no LLM). Falls back to LLM only if the template parser returns
+          no data.
 
 One LLM call per file keeps Groq usage minimal.
 """
@@ -17,6 +18,10 @@ from typing import Any, Dict, List, Optional
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
+from app.agents.fundamental.excel_template_extractor import (
+    extract_from_template,
+    is_template_format,
+)
 from app.agents.fundamental.state import FileInput, FinancialYear, FundamentalState
 from app.agents.llm import build_llm
 
@@ -116,19 +121,32 @@ async def file_extractor_node(state: FundamentalState) -> FundamentalState:
     for f in files:
         logger.info("Extracting %s (%s)", f["filename"], f["file_type"])
         try:
-            if f["file_type"] == "pdf":
-                text = _extract_text_from_pdf(f["content"])
-            else:
-                text = _extract_text_from_excel(f["content"])
+            years: List[FinancialYear] = []
 
-            if not text.strip():
-                errors.append(f"{f['filename']}: could not read any text.")
-                continue
+            # ── Excel: try deterministic template extractor first ─────────────
+            if f["file_type"] == "xlsx" and is_template_format(f["content"]):
+                years = extract_from_template(f["content"])
+                if years:
+                    logger.info(
+                        "%s: template extraction succeeded (%d year(s), no LLM used)",
+                        f["filename"], len(years),
+                    )
 
-            years = await _llm_parse(text, ticker, f.get("year"))
+            # ── Fallback: LLM-based extraction ───────────────────────────────
             if not years:
-                errors.append(f"{f['filename']}: LLM returned no data.")
-                continue
+                if f["file_type"] == "pdf":
+                    text = _extract_text_from_pdf(f["content"])
+                else:
+                    text = _extract_text_from_excel(f["content"])
+
+                if not text.strip():
+                    errors.append(f"{f['filename']}: could not read any text.")
+                    continue
+
+                years = await _llm_parse(text, ticker, f.get("year"))
+                if not years:
+                    errors.append(f"{f['filename']}: LLM returned no data.")
+                    continue
 
             raw_extractions.append({"filename": f["filename"], "years": years})
             all_year_data.extend(years)
