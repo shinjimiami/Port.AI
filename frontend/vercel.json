@@ -3,9 +3,6 @@
   "buildCommand": "npm run build",
   "outputDirectory": ".next",
   "installCommand": "npm install",
-  "env": {
-    "NEXT_PUBLIC_API_URL": "@portai_api_url"
-  },
   "headers": [
     {
       "source": "/(.*)",
